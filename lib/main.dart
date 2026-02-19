@@ -13,11 +13,13 @@ void main() async {
 
 // 名言数据模型
 class Quote {
+  final int id;
   final String english;
   final String chinese;
   final String author;
 
   const Quote({
+    required this.id,
     required this.english,
     required this.chinese,
     required this.author,
@@ -32,7 +34,7 @@ class StoicApp extends StatelessWidget {
     return MaterialApp(
       title: 'Stoic Wisdom',
       debugShowCheckedModeBanner: false,
-      // 浅色主题 (保留你原来的质感)
+      // 浅色主题
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.grey,
@@ -41,7 +43,7 @@ class StoicApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFFAFAFA),
         useMaterial3: true,
       ),
-      // 深色主题 (新加入的灵魂)
+      // 深色主题
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,
@@ -88,6 +90,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
       final List<Quote> fetched = (data as List<dynamic>)
           .map(
             (row) => Quote(
+              id: row['id'] as int,
               english: row['english'] as String? ?? '',
               chinese: row['chinese'] as String? ?? '',
               author: row['author'] as String? ?? '',
@@ -100,8 +103,9 @@ class _QuoteScreenState extends State<QuoteScreen> {
           _quotes = fetched;
           _currentQuote = _quotes[_random.nextInt(_quotes.length)];
         } else {
-          // 防白板：如果数据库连上了，但是表里没数据
+          // 防白板：数据库连上了但表里没数据
           _currentQuote = const Quote(
+            id: 0,
             english: "Database connected, but no quotes found.",
             chinese: "云端连接成功，但数据库里还没有名言，请去后台添加。",
             author: "System",
@@ -110,10 +114,11 @@ class _QuoteScreenState extends State<QuoteScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      // 防白板：如果发生网络错误或权限错误，直接显示在屏幕上
+      // 防白板：网络错误或权限错误
       print('🔴 报错信息: $e');
       setState(() {
         _currentQuote = Quote(
+          id: 0,
           english: "Oops! Connection failed.",
           chinese: "连接云端失败！\n错误原因：$e",
           author: "Error",
@@ -127,22 +132,21 @@ class _QuoteScreenState extends State<QuoteScreen> {
     if (_quotes.isEmpty || _currentQuote == null) return;
 
     setState(() {
-      // 确保随机选择的名言与当前不同
       Quote newQuote;
       do {
         newQuote = _quotes[_random.nextInt(_quotes.length)];
-      } while (newQuote == _currentQuote && _quotes.length > 1);
+      } while (newQuote.id == _currentQuote!.id && _quotes.length > 1);
       _currentQuote = newQuote;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // 智能检测当前是否为深色模式，以调整文字和组件颜色
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final primaryTextColor = isDark ? Colors.white70 : const Color(0xFF2C2C2C);
-    final secondaryTextColor = isDark ? Colors.white54 : const Color(0xFF5A5A5A);
+    final secondaryTextColor =
+        isDark ? Colors.white54 : const Color(0xFF5A5A5A);
     final authorTextColor = isDark ? Colors.white38 : const Color(0xFF6B6B6B);
     final bottomBarColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
@@ -151,7 +155,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 主要内容区域 - 占据剩余空间
+            // 主要内容区域
             Expanded(
               child: Center(
                 child: _isLoading
@@ -209,7 +213,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
             ),
             // 底部操作栏
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 32.0),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 24.0, horizontal: 32.0),
               decoration: BoxDecoration(
                 color: bottomBarColor,
                 boxShadow: [
@@ -223,21 +228,18 @@ class _QuoteScreenState extends State<QuoteScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // 刷新按钮 (现在真正有用啦！)
                   _ActionButton(
                     icon: Icons.casino_outlined,
                     label: '刷新',
                     onTap: _refreshQuote,
                     isDark: isDark,
                   ),
-                  // 收藏按钮
                   _ActionButton(
                     icon: Icons.favorite_outline,
                     label: '收藏',
                     onTap: () {},
                     isDark: isDark,
                   ),
-                  // 笔记按钮
                   _ActionButton(
                     icon: Icons.edit_outlined,
                     label: '笔记',
@@ -269,7 +271,8 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF5F5F5);
+    final bgColor =
+        isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF5F5F5);
     final iconColor = isDark ? Colors.white70 : const Color(0xFF4A4A4A);
     final labelColor = isDark ? Colors.white54 : const Color(0xFF6B6B6B);
 
