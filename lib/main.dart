@@ -43,7 +43,7 @@ class HomePage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.Shield_outlined, size: 64, color: Colors.blueGrey),
+              const Icon(Icons.shield_outlined, size: 64, color: Colors.blueGrey),
               const SizedBox(height: 40),
               const Text(
                 "“我们遭受的痛苦，\n在想象中远比在现实中更多。”",
