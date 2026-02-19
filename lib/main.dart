@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 核心：用于剪贴板功能
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 初始化 Supabase
   await Supabase.initialize(
     url: 'https://asbzdkewvpixrvfeldwb.supabase.co',
     anonKey: 'sb_publishable_DRkIY58m0eK9B7-_smWxrA_FefcshnA',
@@ -15,35 +15,20 @@ void main() async {
 
 final supabase = Supabase.instance.client;
 
-// ============================================================
-// 数据模型
-// ============================================================
-
 class Quote {
   final int id;
   final String english;
   final String chinese;
   final String author;
-
-  const Quote({
-    required this.id,
-    required this.english,
-    required this.chinese,
-    required this.author,
-  });
+  const Quote({required this.id, required this.english, required this.chinese, required this.author});
 }
-
-// ============================================================
-// App 入口
-// ============================================================
 
 class StoicApp extends StatelessWidget {
   const StoicApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Stoic Wisdom',
+      title: 'Stoic Wisdom | 斯多葛智慧',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.grey, brightness: Brightness.light),
@@ -55,19 +40,18 @@ class StoicApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF121212),
         useMaterial3: true,
       ),
-      themeMode: ThemeMode.system, // 自动跟随系统深色模式
+      themeMode: ThemeMode.system,
       home: const QuoteScreen(),
     );
   }
 }
 
 // ============================================================
-// 登录 / 注册页面
+// 登录页面
 // ============================================================
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -79,44 +63,27 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isSignUp = false;
   String? _errorMessage;
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
   Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-
     if (email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = '请输入邮箱和密码');
       return;
     }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
+    setState(() { _isLoading = true; _errorMessage = null; });
     try {
       if (_isSignUp) {
         await supabase.auth.signUp(email: email, password: password);
       } else {
         await supabase.auth.signInWithPassword(email: email, password: password);
       }
-
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const QuoteScreen()),
-          (route) => false,
+          MaterialPageRoute(builder: (_) => const QuoteScreen()), (route) => false,
         );
       }
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message);
-    } catch (e) {
-      setState(() => _errorMessage = '出错了：$e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -126,51 +93,25 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryTextColor = isDark ? Colors.white70 : const Color(0xFF2C2C2C);
-    final secondaryTextColor = isDark ? Colors.white54 : const Color(0xFF5A5A5A);
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final inputFillColor = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF5F5F5);
-
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: IconThemeData(color: primaryTextColor)),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              children: [
-                Icon(Icons.auto_stories_outlined, size: 48, color: secondaryTextColor),
-                const SizedBox(height: 16),
-                Text('Stoic Wisdom', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w300, color: primaryTextColor)),
-                const SizedBox(height: 48),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(_isSignUp ? '注册解锁 300+ 名言' : '欢迎回来', style: TextStyle(fontSize: 18, color: primaryTextColor), textAlign: TextAlign.center),
-                      const SizedBox(height: 24),
-                      TextField(
-                        controller: _emailController,
-                        style: TextStyle(color: primaryTextColor),
-                        decoration: InputDecoration(hintText: '邮箱', filled: true, fillColor: inputFillColor, border: InputBorder.none),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        style: TextStyle(color: primaryTextColor),
-                        decoration: InputDecoration(hintText: '密码', filled: true, fillColor: inputFillColor, border: InputBorder.none),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_errorMessage != null) Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 12), textAlign: TextAlign.center),
-                      ElevatedButton(onPressed: _isLoading ? null : _handleAuth, child: Text(_isSignUp ? '注册' : '登录')),
-                      TextButton(onPressed: () => setState(() => _isSignUp = !_isSignUp), child: Text(_isSignUp ? '已有账号？去登录' : '没有账号？去注册')),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              const Icon(Icons.auto_stories_outlined, size: 48, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text('Stoic Wisdom', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w300, color: primaryTextColor)),
+              const SizedBox(height: 48),
+              TextField(controller: _emailController, decoration: const InputDecoration(hintText: '邮箱')),
+              const SizedBox(height: 12),
+              TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(hintText: '密码')),
+              const SizedBox(height: 24),
+              if (_errorMessage != null) Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+              ElevatedButton(onPressed: _isLoading ? null : _handleAuth, child: Text(_isSignUp ? '注册' : '登录')),
+              TextButton(onPressed: () => setState(() => _isSignUp = !_isSignUp), child: Text(_isSignUp ? '已有账号？去登录' : '没有账号？去注册')),
+            ],
           ),
         ),
       ),
@@ -184,7 +125,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
 class QuoteScreen extends StatefulWidget {
   const QuoteScreen({super.key});
-
   @override
   State<QuoteScreen> createState() => _QuoteScreenState();
 }
@@ -196,7 +136,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
   bool _isLoading = true;
   Set<int> _favoriteQuoteIds = {};
   bool _isFavoriting = false;
-  int _guestViewCount = 0; // 记录游客当日浏览次数
+  int _guestViewCount = 0;
 
   @override
   void initState() {
@@ -211,39 +151,26 @@ class _QuoteScreenState extends State<QuoteScreen> {
       final data = await supabase.from('quotes').select();
       _quotes = (data as List).map((r) => Quote(id: r['id'], english: r['english'], chinese: r['chinese'], author: r['author'])).toList();
       await _assignRandomQuote(isInitialLoad: true);
-    } catch (e) {
-      _currentQuote = Quote(id: 0, english: "Error", chinese: "加载失败: $e", author: "Error");
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  // 核心逻辑：记录次数并判定是否拦截
   Future<void> _assignRandomQuote({required bool isInitialLoad}) async {
     final user = supabase.auth.currentUser;
-    if (user != null) {
-      _pickNewQuote();
-      return;
-    }
-
+    if (user != null) { _pickNewQuote(); return; }
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toString().split(' ')[0];
     String? lastDate = prefs.getString('last_view_date');
     int viewCount = prefs.getInt('view_count') ?? 0;
-
     if (lastDate != today) {
-      await prefs.setString('last_view_date', today);
-      await prefs.setInt('view_count', 1);
-      setState(() => _guestViewCount = 1);
-      _pickNewQuote();
+      await prefs.setString('last_view_date', today); await prefs.setInt('view_count', 1);
+      setState(() => _guestViewCount = 1); _pickNewQuote();
     } else {
       if (viewCount < 10) {
-        await prefs.setInt('view_count', viewCount + 1);
-        setState(() => _guestViewCount = viewCount + 1);
-        _pickNewQuote();
+        await prefs.setInt('view_count', viewCount + 1); setState(() => _guestViewCount = viewCount + 1); _pickNewQuote();
       } else {
-        setState(() => _guestViewCount = 10);
-        _showRegistrationHook(context);
+        setState(() => _guestViewCount = 10); _showRegistrationHook(context);
       }
     }
   }
@@ -257,6 +184,19 @@ class _QuoteScreenState extends State<QuoteScreen> {
     setState(() => _currentQuote = next);
   }
 
+  // 新增：一键复制功能
+  void _copyToClipboard() {
+    if (_currentQuote == null) return;
+    final text = "${_currentQuote!.english}\n${_currentQuote!.chinese}\n— ${_currentQuote!.author}";
+    Clipboard.setData(ClipboardData(text: text)).then((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('名言已复制到剪贴板'), duration: Duration(seconds: 1)),
+        );
+      }
+    });
+  }
+
   Future<void> _fetchFavorites() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
@@ -266,12 +206,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
 
   Future<void> _toggleFavorite() async {
     final user = supabase.auth.currentUser;
-    if (user == null) {
-      _showRegistrationHook(context, isFromFavorite: true);
-      return;
-    }
+    if (user == null) { _showRegistrationHook(context, isFromFavorite: true); return; }
     if (_currentQuote == null || _isFavoriting) return;
-
     setState(() => _isFavoriting = true);
     try {
       if (_favoriteQuoteIds.contains(_currentQuote!.id)) {
@@ -292,22 +228,12 @@ class _QuoteScreenState extends State<QuoteScreen> {
       barrierDismissible: isFromFavorite,
       builder: (context) => AlertDialog(
         title: Text(isFromFavorite ? "收藏以永久保存" : "今日智慧已达上限"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("“欲求多者，所得必少。” —— 塞内卡"),
-            const SizedBox(height: 12),
-            Text(isFromFavorite ? "注册登录后，你可以永久保存击中灵魂的名言。" : "注册并登录后，即可解锁 300+ 完整名言库及评论功能。"),
-          ],
-        ),
+        content: const Text("注册登录后，即可解锁 300+ 完整名言库及评论收藏功能。"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("再逛逛")),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-            },
-            child: const Text("立即注册/登录"),
+            onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())); },
+            child: const Text("立即登录"),
           ),
         ],
       ),
@@ -325,7 +251,6 @@ class _QuoteScreenState extends State<QuoteScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部栏
             Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
@@ -339,37 +264,41 @@ class _QuoteScreenState extends State<QuoteScreen> {
                 ],
               ),
             ),
-            // 内容区带动画
             Expanded(
               child: Center(
-                child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 600),
-                          transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
-                          child: Column(
-                            key: ValueKey(_currentQuote?.id),
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(_currentQuote!.english, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
-                              const SizedBox(height: 20),
-                              Text(_currentQuote!.chinese, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
-                              const SizedBox(height: 24),
-                              Text("— ${_currentQuote!.author}", style: const TextStyle(color: Colors.grey)),
-                              // 渐进式诱惑提示
-                              if (isGuest && _guestViewCount >= 7 && _guestViewCount < 10) ...[
-                                const SizedBox(height: 40),
-                                Text('今日额度剩余 ${10 - _guestViewCount} 条，登录解锁全部', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
-                              ],
-                            ],
-                          ),
+                child: _isLoading ? const CircularProgressIndicator() : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 600),
+                    transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                    child: Column(
+                      key: ValueKey(_currentQuote?.id),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(_currentQuote!.english, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                        Text(_currentQuote!.chinese, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
+                        const SizedBox(height: 24),
+                        Text("— ${_currentQuote!.author}", style: const TextStyle(color: Colors.grey)),
+                        
+                        // 复制按钮
+                        const SizedBox(height: 16),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                          onPressed: _copyToClipboard,
+                          tooltip: '复制名言',
                         ),
-                      ),
+
+                        if (isGuest && _guestViewCount >= 7 && _guestViewCount < 10) ...[
+                          const SizedBox(height: 40),
+                          Text('今日额度剩余 ${10 - _guestViewCount} 条，登录解锁全部', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-            // 底部栏
             Container(
               padding: const EdgeInsets.symmetric(vertical: 20),
               color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -390,13 +319,12 @@ class _QuoteScreenState extends State<QuoteScreen> {
 }
 
 // ============================================================
-// 收藏列表页面（新增：点击取消收藏）
+// 收藏列表页面（含取消收藏功能）
 // ============================================================
 
 class FavoritesScreen extends StatefulWidget {
   final List<Quote> allQuotes;
   const FavoritesScreen({super.key, required this.allQuotes});
-
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
 }
@@ -406,10 +334,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _loading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
     final user = supabase.auth.currentUser;
@@ -422,7 +347,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
   }
 
-  // 新增：在列表页直接取消收藏
   Future<void> _remove(int id) async {
     final user = supabase.auth.currentUser;
     await supabase.from('favorites').delete().eq('user_id', user!.id).eq('quote_id', id);
@@ -433,27 +357,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('我的收藏')),
-      body: _loading 
-        ? const Center(child: CircularProgressIndicator())
-        : ListView.builder(
-            itemCount: _favs.length,
-            itemBuilder: (context, i) => ListTile(
-              title: Text(_favs[i].chinese),
-              subtitle: Text(_favs[i].author),
-              trailing: IconButton(icon: const Icon(Icons.favorite, color: Colors.redAccent), onPressed: () => _remove(_favs[i].id)),
-            ),
-          ),
+      body: _loading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
+        itemCount: _favs.length,
+        itemBuilder: (context, i) => ListTile(
+          title: Text(_favs[i].chinese),
+          subtitle: Text(_favs[i].author),
+          trailing: IconButton(icon: const Icon(Icons.favorite, color: Colors.redAccent), onPressed: () => _remove(_favs[i].id)),
+        ),
+      ),
     );
   }
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool isActive;
+  final IconData icon; final String label; final VoidCallback onTap; final bool isActive;
   const _ActionButton({required this.icon, required this.label, required this.onTap, this.isActive = false});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
