@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +33,7 @@ class StoicApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      // 加强版标题，确保在手机任务切换器中也能看到
-      title: '每日斯多葛智慧 | Stoic Wisdom', 
+      title: '每日斯多葛智慧 | Stoic Wisdom',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.grey, brightness: Brightness.light),
@@ -70,7 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _errorMessage = '请输入邮箱和密码');
       return;
     }
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       if (_isSignUp) {
         await supabase.auth.signUp(email: email, password: password);
@@ -79,7 +86,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const QuoteScreen()), (route) => false,
+          MaterialPageRoute(builder: (_) => const QuoteScreen()),
+          (route) => false,
         );
       }
     } on AuthException catch (e) {
@@ -94,7 +102,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryTextColor = isDark ? Colors.white70 : const Color(0xFF2C2C2C);
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: IconThemeData(color: primaryTextColor)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: primaryTextColor),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
@@ -102,15 +114,30 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Icon(Icons.auto_stories_outlined, size: 48, color: Colors.grey),
               const SizedBox(height: 16),
-              Text('Stoic Wisdom', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w300, color: primaryTextColor)),
+              Text('Stoic Wisdom',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w300, color: primaryTextColor)),
               const SizedBox(height: 48),
-              TextField(controller: _emailController, decoration: const InputDecoration(hintText: '邮箱')),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(hintText: '邮箱'),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(hintText: '密码')),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(hintText: '密码'),
+              ),
               const SizedBox(height: 24),
-              if (_errorMessage != null) Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
-              ElevatedButton(onPressed: _isLoading ? null : _handleAuth, child: Text(_isSignUp ? '注册' : '登录')),
-              TextButton(onPressed: () => setState(() => _isSignUp = !_isSignUp), child: Text(_isSignUp ? '已有账号？去登录' : '没有账号？去注册')),
+              if (_errorMessage != null)
+                Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent)),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleAuth,
+                child: Text(_isSignUp ? '注册' : '登录'),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _isSignUp = !_isSignUp),
+                child: Text(_isSignUp ? '已有账号？去登录' : '没有账号？去注册'),
+              ),
             ],
           ),
         ),
@@ -136,6 +163,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
   Set<int> _favoriteQuoteIds = {};
   bool _isFavoriting = false;
   int _guestViewCount = 0;
+  bool _isGeneratingCard = false;
 
   @override
   void initState() {
@@ -148,33 +176,30 @@ class _QuoteScreenState extends State<QuoteScreen> {
     setState(() => _isLoading = true);
     try {
       final data = await supabase.from('quotes').select();
-      _quotes = (data as List).map((r) => Quote(id: r['id'], english: r['english'], chinese: r['chinese'], author: r['author'])).toList();
-      // 首次加载应用，执行“每日一言”逻辑
+      _quotes = (data as List)
+          .map((r) => Quote(
+              id: r['id'], english: r['english'], chinese: r['chinese'], author: r['author']))
+          .toList();
       await _assignRandomQuote(isInitialLoad: true);
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  // 核心改动：加入日期种子算法
   Future<void> _assignRandomQuote({required bool isInitialLoad}) async {
     if (_quotes.isEmpty) return;
-    
     final user = supabase.auth.currentUser;
-    
-    // 如果是初次进入（刷新网页或打开 App），显示“每日一言”
+
     if (isInitialLoad) {
       _pickDailyQuote();
       return;
     }
 
-    // 如果用户点击了“刷新”按钮
     if (user != null) {
-      _pickNewQuote(); // 已登录用户无限制随机刷新
+      _pickNewQuote();
       return;
     }
 
-    // 游客点击刷新，检查 10 次限额
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toString().split(' ')[0];
     String? lastDate = prefs.getString('last_view_date');
@@ -197,7 +222,6 @@ class _QuoteScreenState extends State<QuoteScreen> {
     }
   }
 
-  // “每日一言”算法：使用日期作为种子
   void _pickDailyQuote() {
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;
@@ -207,7 +231,6 @@ class _QuoteScreenState extends State<QuoteScreen> {
     });
   }
 
-  // “随机刷新”算法
   void _pickNewQuote() {
     Quote next;
     do {
@@ -218,7 +241,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
 
   void _copyToClipboard() {
     if (_currentQuote == null) return;
-    final text = "${_currentQuote!.english}\n${_currentQuote!.chinese}\n— ${_currentQuote!.author}";
+    final text =
+        "${_currentQuote!.english}\n${_currentQuote!.chinese}\n— ${_currentQuote!.author}";
     Clipboard.setData(ClipboardData(text: text)).then((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -226,6 +250,124 @@ class _QuoteScreenState extends State<QuoteScreen> {
         );
       }
     });
+  }
+
+  // ============================================================
+  // 分享卡片：Canvas 绘制 + 下载
+  // ============================================================
+  Future<void> _generateAndDownloadCard() async {
+    if (_currentQuote == null || _isGeneratingCard) return;
+    setState(() => _isGeneratingCard = true);
+
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      const double cardWidth = 1080;
+      const double cardHeight = 1350;
+      const double padding = 80;
+      const double contentWidth = cardWidth - padding * 2;
+
+      // 深色渐变背景
+      final bgPaint = Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
+        ).createShader(const Rect.fromLTWH(0, 0, cardWidth, cardHeight));
+      canvas.drawRect(const Rect.fromLTWH(0, 0, cardWidth, cardHeight), bgPaint);
+
+      // 顶部装饰线
+      final linePaint = Paint()
+        ..color = const Color(0x33FFFFFF)
+        ..strokeWidth = 1;
+      canvas.drawLine(const Offset(padding, 120), const Offset(cardWidth - padding, 120), linePaint);
+
+      // 英文名言
+      final engParagraph = _buildParagraph(
+        _currentQuote!.english,
+        ui.TextStyle(color: const Color(0xFFE0E0E0), fontSize: 42, fontWeight: ui.FontWeight.w300, height: 1.6),
+        contentWidth,
+        ui.TextAlign.center,
+      );
+
+      // 中文翻译
+      final cnParagraph = _buildParagraph(
+        _currentQuote!.chinese,
+        ui.TextStyle(color: const Color(0x99FFFFFF), fontSize: 34, fontWeight: ui.FontWeight.w300, height: 1.7),
+        contentWidth,
+        ui.TextAlign.center,
+      );
+
+      // 作者
+      final authorParagraph = _buildParagraph(
+        '— ${_currentQuote!.author}',
+        ui.TextStyle(color: const Color(0x66FFFFFF), fontSize: 28, fontWeight: ui.FontWeight.w400, fontStyle: ui.FontStyle.italic),
+        contentWidth,
+        ui.TextAlign.center,
+      );
+
+      // 垂直居中
+      final totalH = engParagraph.height + 50 + cnParagraph.height + 50 + authorParagraph.height;
+      double y = (cardHeight - totalH) / 2;
+      if (y < 160) y = 160;
+
+      canvas.drawParagraph(engParagraph, Offset(padding, y));
+      y += engParagraph.height + 50;
+      canvas.drawParagraph(cnParagraph, Offset(padding, y));
+      y += cnParagraph.height + 50;
+      canvas.drawParagraph(authorParagraph, Offset(padding, y));
+
+      // 底部装饰线
+      canvas.drawLine(const Offset(padding, cardHeight - 120), const Offset(cardWidth - padding, cardHeight - 120), linePaint);
+
+      // 水印
+      final wmParagraph = _buildParagraph(
+        'STOIC WISDOM',
+        ui.TextStyle(color: const Color(0x44FFFFFF), fontSize: 22, fontWeight: ui.FontWeight.w300, letterSpacing: 2),
+        contentWidth,
+        ui.TextAlign.center,
+      );
+      canvas.drawParagraph(wmParagraph, Offset(padding, cardHeight - 90));
+
+      // 生成图片并下载
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(cardWidth.toInt(), cardHeight.toInt());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData != null) {
+        final bytes = byteData.buffer.asUint8List();
+        final blob = html.Blob([bytes], 'image/png');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)
+          ..setAttribute('download', 'stoic_wisdom_${_currentQuote!.id}.png')
+          ..click();
+        html.Url.revokeObjectUrl(url);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('卡片已生成，正在下载...'), duration: Duration(seconds: 2)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('生成失败：$e'), duration: const Duration(seconds: 2)),
+        );
+      }
+    } finally {
+      setState(() => _isGeneratingCard = false);
+    }
+  }
+
+  ui.Paragraph _buildParagraph(String text, ui.TextStyle style, double maxWidth, ui.TextAlign align) {
+    final builder = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: align, maxLines: 20))
+      ..pushStyle(style)
+      ..addText(text);
+    final paragraph = builder.build();
+    paragraph.layout(ui.ParagraphConstraints(width: maxWidth));
+    return paragraph;
   }
 
   Future<void> _fetchFavorites() async {
@@ -237,7 +379,10 @@ class _QuoteScreenState extends State<QuoteScreen> {
 
   Future<void> _toggleFavorite() async {
     final user = supabase.auth.currentUser;
-    if (user == null) { _showRegistrationHook(context, isFromFavorite: true); return; }
+    if (user == null) {
+      _showRegistrationHook(context, isFromFavorite: true);
+      return;
+    }
     if (_currentQuote == null || _isFavoriting) return;
     setState(() => _isFavoriting = true);
     try {
@@ -258,13 +403,16 @@ class _QuoteScreenState extends State<QuoteScreen> {
       context: context,
       barrierDismissible: isFromFavorite,
       builder: (context) => AlertDialog(
-        title: Text(isFromFavorite ? "收藏以永久保存" : "今日智慧已达上限"),
-        content: const Text("注册登录后，即可解锁 300+ 完整名言库及评论收藏功能。"),
+        title: Text(isFromFavorite ? '收藏以永久保存' : '今日智慧已达上限'),
+        content: const Text('注册登录后，即可解锁 300+ 完整名言库及收藏功能。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("再逛逛")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('再逛逛')),
           ElevatedButton(
-            onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())); },
-            child: const Text("立即登录"),
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+            },
+            child: const Text('立即登录'),
           ),
         ],
       ),
@@ -282,65 +430,100 @@ class _QuoteScreenState extends State<QuoteScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // 顶部栏
             Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(isGuest ? '游客模式' : user.email!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(isGuest ? '游客模式' : user.email!,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   GestureDetector(
-                    onTap: () => isGuest ? Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())) : supabase.auth.signOut().then((_) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const QuoteScreen()))),
-                    child: Text(isGuest ? '登录' : '退出', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onTap: () => isGuest
+                        ? Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()))
+                        : supabase.auth.signOut().then((_) => Navigator.pushReplacement(
+                            context, MaterialPageRoute(builder: (_) => const QuoteScreen()))),
+                    child: Text(isGuest ? '登录' : '退出',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
             ),
+
+            // 主内容
             Expanded(
               child: Center(
-                child: _isLoading ? const CircularProgressIndicator() : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
-                    child: Column(
-                      key: ValueKey(_currentQuote?.id),
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(_currentQuote!.english, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
-                        const SizedBox(height: 20),
-                        Text(_currentQuote!.chinese, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300), textAlign: TextAlign.center),
-                        const SizedBox(height: 24),
-                        Text("— ${_currentQuote!.author}", style: const TextStyle(color: Colors.grey)),
-                        
-                        const SizedBox(height: 16),
-                        IconButton(
-                          icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
-                          onPressed: _copyToClipboard,
-                          tooltip: '复制名言',
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, anim) =>
+                              FadeTransition(opacity: anim, child: child),
+                          child: Column(
+                            key: ValueKey(_currentQuote?.id),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(_currentQuote!.english,
+                                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300),
+                                  textAlign: TextAlign.center),
+                              const SizedBox(height: 20),
+                              Text(_currentQuote!.chinese,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300),
+                                  textAlign: TextAlign.center),
+                              const SizedBox(height: 24),
+                              Text('— ${_currentQuote!.author}',
+                                  style: const TextStyle(color: Colors.grey)),
+                              const SizedBox(height: 16),
+                              IconButton(
+                                icon: const Icon(Icons.copy_rounded, size: 20, color: Colors.grey),
+                                onPressed: _copyToClipboard,
+                                tooltip: '复制名言',
+                              ),
+                              if (isGuest && _guestViewCount >= 7 && _guestViewCount < 10) ...[
+                                const SizedBox(height: 40),
+                                Text('今日额度剩余 ${10 - _guestViewCount} 条，登录解锁全部',
+                                    style: const TextStyle(
+                                        fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
+                              ],
+                            ],
+                          ),
                         ),
-
-                        if (isGuest && _guestViewCount >= 7 && _guestViewCount < 10) ...[
-                          const SizedBox(height: 40),
-                          Text('今日额度剩余 ${10 - _guestViewCount} 条，登录解锁全部', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
               ),
             ),
+
+            // 底部操作栏
             Container(
               padding: const EdgeInsets.symmetric(vertical: 20),
               color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _ActionButton(icon: Icons.casino_outlined, label: '刷新', onTap: () => _assignRandomQuote(isInitialLoad: false)),
-                  _ActionButton(icon: isFavorited ? Icons.favorite : Icons.favorite_outline, label: '收藏', onTap: _toggleFavorite, isActive: isFavorited),
-                  _ActionButton(icon: Icons.list_outlined, label: '列表', onTap: () => isGuest ? _showRegistrationHook(context, isFromFavorite: true) : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes)))),
+                  _ActionButton(
+                      icon: Icons.casino_outlined,
+                      label: '刷新',
+                      onTap: () => _assignRandomQuote(isInitialLoad: false)),
+                  _ActionButton(
+                      icon: isFavorited ? Icons.favorite : Icons.favorite_outline,
+                      label: '收藏',
+                      onTap: _toggleFavorite,
+                      isActive: isFavorited),
+                  _ActionButton(
+                      icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined,
+                      label: '分享',
+                      onTap: _generateAndDownloadCard),
+                  _ActionButton(
+                      icon: Icons.list_outlined,
+                      label: '列表',
+                      onTap: () => isGuest
+                          ? _showRegistrationHook(context, isFromFavorite: true)
+                          : Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes)))),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -363,7 +546,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     final user = supabase.auth.currentUser;
@@ -386,26 +572,60 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('我的收藏')),
-      body: _loading ? const Center(child: CircularProgressIndicator()) : ListView.builder(
-        itemCount: _favs.length,
-        itemBuilder: (context, i) => ListTile(
-          title: Text(_favs[i].chinese),
-          subtitle: Text(_favs[i].author),
-          trailing: IconButton(icon: const Icon(Icons.favorite, color: Colors.redAccent), onPressed: () => _remove(_favs[i].id)),
-        ),
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _favs.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.favorite_outline, size: 48, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('还没有收藏任何名言', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _favs.length,
+                  itemBuilder: (context, i) => ListTile(
+                    title: Text(_favs[i].chinese),
+                    subtitle: Text(_favs[i].author),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.favorite, color: Colors.redAccent),
+                      onPressed: () => _remove(_favs[i].id),
+                    ),
+                  ),
+                ),
     );
   }
 }
 
+// ============================================================
+// 通用按钮组件
+// ============================================================
 class _ActionButton extends StatelessWidget {
-  final IconData icon; final String label; final VoidCallback onTap; final bool isActive;
-  const _ActionButton({required this.icon, required this.label, required this.onTap, this.isActive = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isActive;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isActive = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(children: [Icon(icon, color: isActive ? Colors.redAccent : Colors.grey), Text(label, style: const TextStyle(fontSize: 10))]),
+      child: Column(
+        children: [
+          Icon(icon, color: isActive ? Colors.redAccent : Colors.grey),
+          Text(label, style: const TextStyle(fontSize: 10)),
+        ],
+      ),
     );
   }
 }
