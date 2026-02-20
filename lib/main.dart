@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // 必须直接导入 supabase 插件
 import 'quote_screen.dart';
 
 void main() async {
+  // 1. 确保 Flutter 绑定初始化
   WidgetsFlutterBinding.ensureInitialized();
-  await supabase; // 这里在 config.dart 里已初始化过了的实例
+  
+  // 2. 彻底初始化 Supabase，这是防止白屏的关键地基
+  await Supabase.initialize(
+    url: 'https://asbzdkewvpixrvfeldwb.supabase.co',
+    anonKey: 'sb_publishable_DRkIY58m0eK9B7-_smWxrA_FefcshnA',
+  );
+  
+  // 3. 启动应用
   runApp(const StoicApp());
 }
 
@@ -50,6 +58,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
     _fadeIn = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
     _controller.forward();
+    
+    // 启动页停留 2 秒后跳转至主引擎
     Future.delayed(const Duration(milliseconds: 2000), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -64,7 +74,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() { 
+    _controller.dispose(); 
+    super.dispose(); 
+  }
 
   @override
   Widget build(BuildContext context) {
