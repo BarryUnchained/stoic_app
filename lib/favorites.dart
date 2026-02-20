@@ -255,6 +255,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                             }(),
                             style: const TextStyle(fontSize: 10, color: Colors.grey),
                           ),
+                          onTap: () {
+                            // 点击评论自动填充回复目标
+                            final targetUser = c['profiles']?['username'] ?? '匿名践行者';
+                            _commentController.text = "回复 @$targetUser : ";
+                          },
                         );
                       },
                     ),

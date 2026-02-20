@@ -62,7 +62,6 @@ class _QuoteScreenState extends State<QuoteScreen> {
 
   Future<void> _fetchQuotes() async {
     try {
-      // 在这里直接带出 comments(count)，杜绝重复请求
       final data = await supabase.from('quotes').select('*, comments(count)');
       _quotes = (data as List).map((r) => Quote.fromJson(r)).toList();
       final prefs = await SharedPreferences.getInstance();
@@ -338,12 +337,21 @@ class _QuoteScreenState extends State<QuoteScreen> {
                   children: [
                     _ActionBtn(icon: Icons.casino_outlined, label: '刷新', onTap: () => _assignRandomQuote(isInitialLoad: false)),
                     SizedBox(width: 56, child: Stack(clipBehavior: Clip.none, children: [Center(child: _ActionBtn(icon: isFav ? Icons.favorite : Icons.favorite_outline, label: '收藏', onTap: _toggleFavorite, isActive: isFav)), if (_favoriteQuoteIds.isNotEmpty) Positioned(right: 4, top: -4, child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: Text('${_favoriteQuoteIds.length}', style: const TextStyle(fontSize: 8, color: Colors.white, height: 1))))])),
-                    _ActionBtn(icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined, label: '分享', onTap: () => _shareCard()),
                     _ActionBtn(
-                      icon: Icons.list_outlined, 
-                      label: _currentQuote != null && _currentQuote!.commentCount > 0 ? '感悟(${_currentQuote!.commentCount})' : '列表', 
-                      onTap: () => isGuest ? _showRegistrationHook(context, isFromFavorite: true) : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes, favoriteIds: _favoriteQuoteIds)))
+                      icon: Icons.chat_bubble_outline, 
+                      label: _currentQuote != null && _currentQuote!.commentCount > 0 ? '感悟(${_currentQuote!.commentCount})' : '感悟', 
+                      onTap: () {
+                        if (_currentQuote == null) return;
+                        if (isGuest) { _showRegistrationHook(context); return; }
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => QuoteDetailScreen(
+                          quote: _currentQuote!, 
+                          isFavorited: isFav, 
+                          onFavoriteChanged: (fav) { if (fav != isFav) _toggleFavorite(); }
+                        )));
+                      }
                     ),
+                    _ActionBtn(icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined, label: '分享', onTap: () => _shareCard()),
+                    _ActionBtn(icon: Icons.list_outlined, label: '列表', onTap: () => isGuest ? _showRegistrationHook(context, isFromFavorite: true) : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes, favoriteIds: _favoriteQuoteIds)))),
                   ],
                 ),
               ),

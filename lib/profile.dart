@@ -44,7 +44,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Center(child: Icon(Icons.account_circle_outlined, size: 64, color: Colors.grey)),
           const SizedBox(height: 8),
           Center(child: Text(email, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+          
           const SizedBox(height: 32),
+          // 新增：我的评论足迹入口
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.forum_outlined, color: Colors.blueGrey),
+            title: const Text('我的修行足迹 (评论过的名言)'),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyCommentsScreen())),
+          ),
+          const Divider(),
+          const SizedBox(height: 16),
+
           const Text('昵称', style: TextStyle(fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           TextField(controller: _controller, maxLength: 20, decoration: const InputDecoration(hintText: '设置你的昵称', border: OutlineInputBorder(), counterText: '')),
@@ -65,6 +77,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('Version 2.0', style: TextStyle(color: Colors.grey, fontSize: 11)),
         ],
       ),
+    );
+  }
+}
+
+// ============================================================
+// 我的评论列表页
+// ============================================================
+class MyCommentsScreen extends StatefulWidget {
+  const MyCommentsScreen({super.key});
+  @override
+  State<MyCommentsScreen> createState() => _MyCommentsScreenState();
+}
+
+class _MyCommentsScreenState extends State<MyCommentsScreen> {
+  List<dynamic> _myComments = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMyComments();
+  }
+
+  Future<void> _fetchMyComments() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      // 联表查询：查出自己的评论，同时带出对应名言的英文内容
+      final data = await supabase
+          .from('comments')
+          .select('*, quotes(english)')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      if (mounted) setState(() { _myComments = data as List<dynamic>; });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载失败: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('我的足迹')),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : _myComments.isEmpty 
+          ? const Center(child: Text('你还没有留下过任何感悟', style: TextStyle(color: Colors.grey)))
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _myComments.length,
+              itemBuilder: (context, index) {
+                final c = _myComments[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c['quotes']?['english'] ?? '未知名言', style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                        const SizedBox(height: 8),
+                        Text(c['content'], style: const TextStyle(fontSize: 14)),
+                        const SizedBox(height: 8),
+                        Text(c['created_at'].toString().substring(0, 10), style: const TextStyle(fontSize: 10, color: Colors.blueGrey)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
