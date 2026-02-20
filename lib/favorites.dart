@@ -3,19 +3,57 @@ import 'package:google_fonts/google_fonts.dart';
 import 'config.dart';
 import 'models.dart';
 
-class QuoteDetailScreen extends StatefulWidget {
-  final Quote quote;
-  final bool isFavorited;
-  final Function(bool) onFavoriteChanged;
-  const QuoteDetailScreen({super.key, required this.quote, required this.isFavorited, required this.onFavoriteChanged});
-  @override
-  State<QuoteDetailScreen> createState() => _QuoteDetailScreenState();
-}
+// 在 favorites.dart 顶部确保有这行：import 'config.dart';
 
 class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
   late bool _isFav;
+  final _commentController = TextEditingController();
+  List<dynamic> _comments = [];
+  bool _loadingComments = true;
+
   @override
-  void initState() { super.initState(); _isFav = widget.isFavorited; }
+  void initState() {
+    super.initState();
+    _isFav = widget.isFavorited;
+    _fetchComments(); // 初始化时拉取评论
+  }
+
+  // 拉取评论逻辑
+  Future<void> _fetchComments() async {
+    try {
+      final data = await supabase
+          .from('comments')
+          .select('*, profiles(username)')
+          .eq('quote_id', widget.quote.id)
+          .order('created_at', ascending: false);
+      setState(() {
+        _comments = data as List<dynamic>;
+        _loadingComments = false;
+      });
+    } catch (e) {
+      print('加载评论失败: $e');
+    }
+  }
+
+  // 提交评论逻辑
+  Future<void> _postComment() async {
+    final user = supabase.auth.currentUser;
+    final content = _commentController.text.trim();
+    if (user == null || content.isEmpty) return;
+
+    try {
+      await supabase.from('comments').insert({
+        'quote_id': widget.quote.id,
+        'user_id': user.id,
+        'content': content,
+      });
+      _commentController.clear();
+      _fetchComments(); // 刷新列表
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('评论已发布')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('发布失败: $e')));
+    }
+  }
 
   Future<void> _toggle() async {
     final user = supabase.auth.currentUser;
@@ -33,25 +71,61 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent, elevation: 0,
         actions: [IconButton(icon: Icon(_isFav ? Icons.favorite : Icons.favorite_outline, color: _isFav ? Colors.redAccent : Colors.grey), onPressed: _toggle)],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(widget.quote.english, style: GoogleFonts.lora(fontSize: 24, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              Text(widget.quote.chinese, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
-              const SizedBox(height: 32),
-              Text('— ${widget.quote.author}', style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 16)),
-            ],
+      body: Column(
+        children: [
+          // 上部：名言卡片
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+            child: Column(
+              children: [
+                Text(widget.quote.english, style: GoogleFonts.lora(fontSize: 22, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Text(widget.quote.chinese, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Text('— ${widget.quote.author}', style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+              ],
+            ),
           ),
-        ),
+          const Divider(),
+          // 下部：评论区
+          Expanded(
+            child: _loadingComments 
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _comments.length,
+                  itemBuilder: (context, index) {
+                    final c = _comments[index];
+                    return ListTile(
+                      title: Text(c['profiles']?['username'] ?? '匿名践行者', style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                      subtitle: Text(c['content'], style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+                      trailing: Text(c['created_at'].toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    );
+                  },
+                ),
+          ),
+          // 底部：输入框
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    decoration: const InputDecoration(hintText: '写下你的感悟...', border: OutlineInputBorder()),
+                  ),
+                ),
+                IconButton(icon: const Icon(Icons.send), onPressed: _postComment),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

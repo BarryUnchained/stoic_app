@@ -11,13 +11,13 @@ class Quote {
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(id: j['id'], english: j['english'], chinese: j['chinese'], author: j['author']);
 }
 
-class CardTheme {
+class AppCardTheme {
   final List<Color> gradient;
   final String name;
   const CardTheme({required this.gradient, required this.name});
 }
 
-const cardThemes = [
+const appCardThemes = [
   CardTheme(name: '深蓝', gradient: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)]),
   CardTheme(name: '暗红', gradient: [Color(0xFF1a0000), Color(0xFF3d0000), Color(0xFF600000)]),
   CardTheme(name: '墨绿', gradient: [Color(0xFF0a1a0a), Color(0xFF0d2818), Color(0xFF04471C)]),

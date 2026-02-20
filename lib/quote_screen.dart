@@ -177,7 +177,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     if (_currentQuote == null || _isGeneratingCard) return;
     setState(() => _isGeneratingCard = true);
     try {
-      final theme = cardThemes[_random.nextInt(cardThemes.length)];
+      final theme = appCardThemes[_random.nextInt(appCardThemes.length)];
       final bytes = await _renderCard(_currentQuote!, theme);
       if (bytes != null) {
         final url = html.Url.createObjectUrlFromBlob(html.Blob([bytes], 'image/png'));
@@ -190,7 +190,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
     } finally { setState(() => _isGeneratingCard = false); }
   }
 
-  Future<List<int>?> _renderCard(Quote q, CardTheme theme) async {
+  Future<List<int>?> _renderCard(Quote q, AppCardTheme theme) async {
     final recorder = ui.PictureRecorder(); final canvas = Canvas(recorder);
     const double w = 1080, h = 1350, p = 80, cw = w - p * 2;
     canvas.drawRect(const Rect.fromLTWH(0, 0, w, h), Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: theme.gradient).createShader(const Rect.fromLTWH(0, 0, w, h)));
