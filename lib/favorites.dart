@@ -151,12 +151,21 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
           .select('*, profiles(username)')
           .eq('quote_id', widget.quote.id)
           .order('created_at', ascending: false);
-      setState(() {
-        _comments = data as List<dynamic>;
-        _loadingComments = false;
-      });
+      if (mounted) {
+        setState(() {
+          _comments = data as List<dynamic>;
+        });
+      }
     } catch (e) {
-      debugPrint('加载评论失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('评论加载失败: $e'), duration: const Duration(seconds: 4)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingComments = false;
+        });
+      }
     }
   }
 
@@ -225,18 +234,20 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
           Expanded(
             child: _loadingComments 
               ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _comments.length,
-                  itemBuilder: (context, index) {
-                    final c = _comments[index];
-                    return ListTile(
-                      title: Text(c['profiles']?['username'] ?? '匿名践行者', style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-                      subtitle: Text(c['content'], style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
-                      trailing: Text(c['created_at'].toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                    );
-                  },
-                ),
+              : _comments.isEmpty 
+                  ? const Center(child: Text('暂无感悟，成为第一个留下足迹的人吧', style: TextStyle(color: Colors.grey, fontSize: 12)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _comments.length,
+                      itemBuilder: (context, index) {
+                        final c = _comments[index];
+                        return ListTile(
+                          title: Text(c['profiles']?['username'] ?? '匿名践行者', style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                          subtitle: Text(c['content'], style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+                          trailing: Text(c['created_at'].toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        );
+                      },
+                    ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
