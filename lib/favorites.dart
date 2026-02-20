@@ -244,7 +244,17 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> {
                         return ListTile(
                           title: Text(c['profiles']?['username'] ?? '匿名践行者', style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
                           subtitle: Text(c['content'], style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
-                          trailing: Text(c['created_at'].toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          trailing: Text(
+                            () {
+                              try {
+                                final dt = DateTime.parse(c['created_at']).toLocal();
+                                return "${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
+                              } catch (e) {
+                                return "未知时间";
+                              }
+                            }(),
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
                         );
                       },
                     ),

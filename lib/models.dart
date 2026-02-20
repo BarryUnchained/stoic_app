@@ -5,13 +5,34 @@ class Quote {
   final String english;
   final String chinese;
   final String author;
-  const Quote({required this.id, required this.english, required this.chinese, required this.author});
+  final int commentCount; // 新增字段
+
+  const Quote({
+    required this.id, 
+    required this.english, 
+    required this.chinese, 
+    required this.author,
+    this.commentCount = 0, // 默认 0 条
+  });
 
   Map<String, dynamic> toJson() => {'id': id, 'english': english, 'chinese': chinese, 'author': author};
-  factory Quote.fromJson(Map<String, dynamic> j) => Quote(id: j['id'], english: j['english'], chinese: j['chinese'], author: j['author']);
+  
+  factory Quote.fromJson(Map<String, dynamic> j) {
+    // 自动解析 Supabase 返回的评论统计
+    int count = 0;
+    if (j['comments'] != null && (j['comments'] as List).isNotEmpty) {
+      count = j['comments'][0]['count'] ?? 0;
+    }
+    return Quote(
+      id: j['id'], 
+      english: j['english'], 
+      chinese: j['chinese'], 
+      author: j['author'],
+      commentCount: count,
+    );
+  }
 }
 
-// 核心修复：类名与构造函数必须一致！
 class AppCardTheme {
   final List<Color> gradient;
   final String name;
