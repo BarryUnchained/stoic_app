@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'dart:convert';
-import 'dart:html' as html;
 import 'config.dart';
 import 'models.dart';
 import 'auth.dart';
@@ -180,10 +178,8 @@ class _QuoteScreenState extends State<QuoteScreen> {
       final theme = appCardThemes[_random.nextInt(appCardThemes.length)];
       final bytes = await _renderCard(_currentQuote!, theme);
       if (bytes != null) {
-        final url = html.Url.createObjectUrlFromBlob(html.Blob([bytes], 'image/png'));
-        html.AnchorElement(href: url)..setAttribute('download', 'stoic_wisdom_${_currentQuote!.id}.png')..click();
-        html.Url.revokeObjectUrl(url);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('卡片已下载'), duration: Duration(seconds: 2)));
+// Web only - skip on macOS
+print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('卡片已下载'), duration: Duration(seconds: 2)));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('生成失败：$e')));
@@ -309,7 +305,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(_currentQuote?.english ?? '', style: GoogleFonts.lora(fontSize: 22, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
+                                      Text(_currentQuote?.english ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
                                       const SizedBox(height: 20),
                                       Text(_currentQuote?.chinese ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
                                       const SizedBox(height: 24),

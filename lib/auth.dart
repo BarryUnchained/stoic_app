@@ -1,8 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'config.dart';
 import 'quote_screen.dart';
+
+class PasswordValidator {
+  static final _upperRegex = RegExp(r'[A-Z]');
+  static final _digitRegex = RegExp(r'[0-9]');
+
+  static String? validate(String password) {
+    if (password.isEmpty) return '密码不能为空';
+    if (password.length < 8) return '密码至少 8 位';
+    if (!_upperRegex.hasMatch(password)) return '密码需包含至少一个大写字母';
+    if (!_digitRegex.hasMatch(password)) return '密码需包含至少一个数字';
+    return null;
+  }
+}
+
+class EmailValidator {
+static final _regex = RegExp(r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$');
+  static bool isValid(String email) => _regex.hasMatch(email);
+  
+  static String? validate(String email) {
+    if (email.isEmpty) return '邮箱不能为空';
+    if (!isValid(email)) return '请输入有效的邮箱地址';
+    return null;
+  }
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,7 +36,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController(); // 新增确认密码
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   bool _isSignUp = false;
   String? _errorMessage;
@@ -21,74 +44,78 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) { setState(() => _errorMessage = '请输入邮箱和密码'); return; }
-    if (password.length < 6) { setState(() => _errorMessage = '密码至少 6 位'); return; }
     
-    // 注册模式下的防呆拦截
-    if (_isSignUp && password != _confirmPasswordController.text.trim()) {
-      setState(() => _errorMessage = '两次输入的密码不一致'); return; 
+    final emailError = EmailValidator.validate(email);
+    if (emailError != null) {
+      setState(() => _errorMessage = emailError);
+      return;
+    }
+    
+    final pwdError = PasswordValidator.validate(password);
+    if (pwdError != null) {
+      setState(() => _errorMessage = pwdError);
+      return;
+    }
+    
+    if (_isSignUp) {
+      if (password != _confirmPasswordController.text.trim()) {
+        setState(() => _errorMessage = '两次输入的密码不一致');
+        return; 
+      }
     }
 
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
       if (_isSignUp) {
-        await supabase.auth.signUp(email: email, password: password);
+        final response = await supabase.auth.signUp(email: email, password: password);
+        if (mounted && response.user != null) {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetUsernameScreen(onDone: (username) {
+            Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
+          })));
+          return;
+        }
       } else {
         await supabase.auth.signInWithPassword(email: email, password: password);
-      }
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
+        }
       }
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      setState(() => _errorMessage = _mapAuthError(e.message));
+    } catch (e) {
+      setState(() => _errorMessage = '网络错误');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  String _mapAuthError(String rawError) {
+    if (rawError.contains('already registered')) return '该邮箱已注册';
+    if (rawError.contains('Invalid login credentials')) return '邮箱或密码错误';
+    return '认证失败，请重试';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white70 : const Color(0xFF2C2C2C);
-    
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: IconThemeData(color: textColor)),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
           child: Column(children: [
-            Icon(_isSignUp ? Icons.person_add_alt_1_outlined : Icons.auto_stories_outlined, size: 48, color: _isSignUp ? Colors.blueGrey : Colors.grey),
+            Icon(_isSignUp ? Icons.person_add_alt_1_outlined : Icons.auto_stories_outlined, size: 48),
             const SizedBox(height: 16),
-            Text(_isSignUp ? '加入 Stoic 社区' : '欢迎回到宁静', style: GoogleFonts.lora(fontSize: 24, fontWeight: FontWeight.w300, color: textColor)),
-            const SizedBox(height: 8),
-            Text(_isSignUp ? '解锁 300+ 完整名言与收藏功能' : '每日斯多葛智慧', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(_isSignUp ? '加入 Stoic 社区' : '欢迎回到家园', style: const TextStyle(fontSize: 24)),
             const SizedBox(height: 48),
-            TextField(controller: _emailController, decoration: const InputDecoration(hintText: '邮箱', border: OutlineInputBorder())),
+            TextField(controller: _emailController, decoration: const InputDecoration(hintText: '邮箱', border: OutlineInputBorder()), keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 12),
-            TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(hintText: '密码（至少6位）', border: OutlineInputBorder()), onSubmitted: (_) => _isSignUp ? null : _handleAuth()),
-            
-            // 注册模式下才显示的确认密码框
-            if (_isSignUp) ...[
-              const SizedBox(height: 12),
-              TextField(controller: _confirmPasswordController, obscureText: true, decoration: const InputDecoration(hintText: '再次确认密码', border: OutlineInputBorder()), onSubmitted: (_) => _handleAuth()),
-            ],
-
+            TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(hintText: _isSignUp ? '密码（8位以上，需大写和数字）' : '密码', border: const OutlineInputBorder()), onSubmitted: (_) => _handleAuth()),
+            if (_isSignUp) ...[const SizedBox(height: 12), TextField(controller: _confirmPasswordController, obscureText: true, decoration: const InputDecoration(hintText: '再次确认密码', border: OutlineInputBorder()), onSubmitted: (_) => _handleAuth())],
             const SizedBox(height: 20),
-            if (_errorMessage != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 13))),
-            
-            SizedBox(
-              width: double.infinity, height: 48, 
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _isSignUp ? (isDark ? Colors.white24 : Colors.black87) : null),
-                onPressed: _isLoading ? null : _handleAuth, 
-                child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text(_isSignUp ? '立即注册' : '登录')
-              )
-            ),
+            if (_errorMessage != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent))),
+            SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: _isLoading ? null : _handleAuth, child: _isLoading ? const CircularProgressIndicator(strokeWidth: 2) : Text(_isSignUp ? '立即注册' : '登录'))),
             const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => setState(() { _isSignUp = !_isSignUp; _errorMessage = null; _confirmPasswordController.clear(); }), 
-              child: Text(_isSignUp ? '已有账号？点此登录' : '没有账号？点此注册')
-            ),
+            TextButton(onPressed: () => setState(() { _isSignUp = !_isSignUp; _errorMessage = null; }), child: Text(_isSignUp ? '已有账号？点此登录' : '没有账号？点此注册')),
           ]),
         ),
       ),
@@ -110,12 +137,12 @@ class _SetUsernameScreenState extends State<SetUsernameScreen> {
   Future<void> _save() async {
     final name = _controller.text.trim();
     if (name.isEmpty || name.length > 20) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('昵称需在 1-20 个字内'))); return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('昵称需在 1-20 个字内')));
+      return;
     }
     setState(() => _saving = true);
     try {
-      final uid = supabase.auth.currentUser!.id;
-      await supabase.from('profiles').upsert({'id': uid, 'username': name, 'updated_at': DateTime.now().toIso8601String()});
+      await supabase.from('profiles').upsert({'id': supabase.auth.currentUser!.id, 'username': name});
       widget.onDone(name);
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -129,25 +156,14 @@ class _SetUsernameScreenState extends State<SetUsernameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('设置昵称'), backgroundColor: Colors.transparent, elevation: 0),
-      body: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 20),
-            const Text('给自己取个名字吧', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w300)),
-            const SizedBox(height: 8),
-            const Text('其他用户会看到这个名字', style: TextStyle(fontSize: 13, color: Colors.grey)),
-            const SizedBox(height: 32),
-            // 注意：删除了会导致弹窗键盘闪退的 autofocus: true 
-            TextField(controller: _controller, maxLength: 20, decoration: const InputDecoration(hintText: '输入昵称', border: OutlineInputBorder(), counterText: ''), onSubmitted: (_) => _save()),
-            const SizedBox(height: 24),
-            SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: _saving ? null : _save, child: _saving ? const CircularProgressIndicator(strokeWidth: 2) : const Text('确认'))),
-            const SizedBox(height: 12),
-            Center(child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('以后再说', style: TextStyle(color: Colors.grey)))),
-          ],
-        ),
-      ),
+      body: Padding(padding: const EdgeInsets.all(32), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(height: 20),
+        const Text('给自己取个昵称吧', style: TextStyle(fontSize: 20)),
+        const SizedBox(height: 32),
+        TextField(controller: _controller, maxLength: 20, decoration: const InputDecoration(hintText: '输入昵称', border: OutlineInputBorder(), counterText: ''), onSubmitted: (_) => _save()),
+        const SizedBox(height: 24),
+        SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: _saving ? null : _save, child: _saving ? const CircularProgressIndicator(strokeWidth: 2) : const Text('确认'))),
+      ])),
     );
   }
 }
