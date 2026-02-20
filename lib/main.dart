@@ -455,34 +455,13 @@ class _QuoteScreenState extends State<QuoteScreen> {
   }
 
   // #8 设置昵称弹窗
-  void _showSetUsernameDialog() {
-    final controller = TextEditingController(text: _username ?? '');
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('设置你的昵称'),
-        content: TextField(
-          controller: controller,
-          maxLength: 20,
-          decoration: const InputDecoration(hintText: '给自己取个名字吧', counterText: '', border: OutlineInputBorder()),
+ void _showSetUsernameDialog() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SetUsernameScreen(
+          onDone: (name) => setState(() => _username = name),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('以后再说')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              final uid = supabase.auth.currentUser!.id;
-              try {
-                await supabase.from('profiles').upsert({'id': uid, 'username': name, 'updated_at': DateTime.now().toIso8601String()});
-                setState(() => _username = name);
-              } catch (_) {}
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('确认'),
-          ),
-        ],
       ),
     );
   }
@@ -665,7 +644,119 @@ class _QuoteScreenState extends State<QuoteScreen> {
                         ),
                       ),
               ),
+// ============================================================
+// 设置昵称独立页面（修复华为浏览器输入问题）
+// ============================================================
+class SetUsernameScreen extends StatefulWidget {
+  final Function(String) onDone;
+  const SetUsernameScreen({super.key, required this.onDone});
+  @override
+  State<SetUsernameScreen> createState() => _SetUsernameScreenState();
+}
 
+class _SetUsernameScreenState extends State<SetUsernameScreen> {
+  final _controller = TextEditingController();
+  bool _saving = false;
+
+  Future<void> _save() async {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('昵称不能为空')),
+      );
+      return;
+    }
+    if (name.length > 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('昵称最多20个字')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final uid = supabase.auth.currentUser!.id;
+      await supabase.from('profiles').upsert({
+        'id': uid,
+        'username': name,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      widget.onDone(name);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('设置昵称'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 20),
+            const Text(
+              '给自己取个名字吧',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w300),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '其他用户会看到这个名字',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+            TextField(
+              controller: _controller,
+              maxLength: 20,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '输入昵称',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('确认'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('以后再说', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
               // 底部操作栏：#23
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -674,13 +765,25 @@ class _QuoteScreenState extends State<QuoteScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _ActionBtn(icon: Icons.casino_outlined, label: '刷新', onTap: () => _assignRandomQuote(isInitialLoad: false)),
-                    Stack(children: [
-                      _ActionBtn(icon: isFav ? Icons.favorite : Icons.favorite_outline, label: '收藏', onTap: _toggleFavorite, isActive: isFav),
-                      if (_favoriteQuoteIds.isNotEmpty) Positioned(right: 0, top: 0, child: Container(
-                        padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
-                        child: Text('${_favoriteQuoteIds.length}', style: const TextStyle(fontSize: 8, color: Colors.white)),
-                      )),
-                    ]),
+                    SizedBox(
+  width: 56,
+  child: Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Center(child: _ActionBtn(icon: isFav ? Icons.favorite : Icons.favorite_outline, label: '收藏', onTap: _toggleFavorite, isActive: isFav)),
+      if (_favoriteQuoteIds.isNotEmpty)
+        Positioned(
+          right: 4,
+          top: -4,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+            child: Text('${_favoriteQuoteIds.length}', style: const TextStyle(fontSize: 8, color: Colors.white, height: 1)),
+          ),
+        ),
+    ],
+  ),
+),
                     _ActionBtn(icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined, label: '分享', onTap: () => _shareCard()),
                     _ActionBtn(icon: Icons.list_outlined, label: '列表', onTap: () => isGuest ? _showRegistrationHook(context, isFromFavorite: true) : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes, favoriteIds: _favoriteQuoteIds)))),
                   ],
