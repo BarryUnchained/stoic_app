@@ -1,23 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'quote_screen.dart';
 
 class PasswordValidator {
-  static final _upperRegex = RegExp(r'[A-Z]');
-  static final _digitRegex = RegExp(r'[0-9]');
-
   static String? validate(String password) {
     if (password.isEmpty) return '密码不能为空';
-    if (password.length < 8) return '密码至少 8 位';
-    if (!_upperRegex.hasMatch(password)) return '密码需包含至少一个大写字母';
-    if (!_digitRegex.hasMatch(password)) return '密码需包含至少一个数字';
+    if (password.length < 6) return '密码至少 6 位';
     return null;
   }
 }
 
 class EmailValidator {
-static final _regex = RegExp(r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$');
+  static final _regex = RegExp(r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$');
   static bool isValid(String email) => _regex.hasMatch(email);
   
   static String? validate(String email) {
@@ -67,7 +63,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
       if (_isSignUp) {
+        if (kDebugMode) print('📝 尝试注册账户: $email');
         final response = await supabase.auth.signUp(email: email, password: password);
+        if (kDebugMode) print('✅ 注册成功，用户ID: ${response.user?.id}');
         if (mounted && response.user != null) {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetUsernameScreen(onDone: (username) {
             Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
@@ -75,23 +73,37 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
       } else {
+        if (kDebugMode) print('🔓 尝试登录账户: $email');
         await supabase.auth.signInWithPassword(email: email, password: password);
+        if (kDebugMode) print('✅ 登录成功，用户ID: ${supabase.auth.currentUser?.id}');
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
         }
       }
     } on AuthException catch (e) {
+      if (kDebugMode) {
+        print('❌ AuthException 异常');
+        print('❌ 错误消息: ${e.message}');
+        print('❌ 错误代码: ${e.statusCode}');
+        print('❌ 完整错误: ${e.toString()}');
+      }
       setState(() => _errorMessage = _mapAuthError(e.message));
     } catch (e) {
-      setState(() => _errorMessage = '网络错误');
+      if (kDebugMode) {
+        print('❌ 捕获到异常');
+        print('❌ 错误类型: ${e.runtimeType}');
+        print('❌ 错误内容: $e');
+      }
+      setState(() => _errorMessage = '网络错误，请稍后重试');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   String _mapAuthError(String rawError) {
-    if (rawError.contains('already registered')) return '该邮箱已注册';
+    if (rawError.contains('already registered') || rawError.contains('already exists')) return '该邮箱已注册';
     if (rawError.contains('Invalid login credentials')) return '邮箱或密码错误';
+    if (rawError.contains('Email not confirmed')) return '请先验证邮箱';
     return '认证失败，请重试';
   }
 
@@ -109,10 +121,10 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 48),
             TextField(controller: _emailController, decoration: const InputDecoration(hintText: '邮箱', border: OutlineInputBorder()), keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 12),
-            TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(hintText: _isSignUp ? '密码（8位以上，需大写和数字）' : '密码', border: const OutlineInputBorder()), onSubmitted: (_) => _handleAuth()),
+            TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(hintText: _isSignUp ? '密码（6位以上即可）' : '密码', border: const OutlineInputBorder()), onSubmitted: (_) => _handleAuth()),
             if (_isSignUp) ...[const SizedBox(height: 12), TextField(controller: _confirmPasswordController, obscureText: true, decoration: const InputDecoration(hintText: '再次确认密码', border: OutlineInputBorder()), onSubmitted: (_) => _handleAuth())],
             const SizedBox(height: 20),
-            if (_errorMessage != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent))),
+            if (_errorMessage != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent), textAlign: TextAlign.center)),
             SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: _isLoading ? null : _handleAuth, child: _isLoading ? const CircularProgressIndicator(strokeWidth: 2) : Text(_isSignUp ? '立即注册' : '登录'))),
             const SizedBox(height: 12),
             TextButton(onPressed: () => setState(() { _isSignUp = !_isSignUp; _errorMessage = null; }), child: Text(_isSignUp ? '已有账号？点此登录' : '没有账号？点此注册')),
@@ -142,11 +154,14 @@ class _SetUsernameScreenState extends State<SetUsernameScreen> {
     }
     setState(() => _saving = true);
     try {
+      if (kDebugMode) print('💾 保存昵称: $name');
       await supabase.from('profiles').upsert({'id': supabase.auth.currentUser!.id, 'username': name});
+      if (kDebugMode) print('✅ 昵称保存成功');
       widget.onDone(name);
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      if (kDebugMode) print('❌ 保存昵称失败: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'dart:convert';
@@ -29,6 +30,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
   String? _username;
   Set<int> _viewedIds = {};
   String _selectedAuthor = 'All';
+  String _selectedTag = 'All';
   bool _showHeartAnimation = false;
 
   final List<String> _authors = ['All', 'Marcus Aurelius', 'Seneca', 'Epictetus'];
@@ -100,10 +102,17 @@ class _QuoteScreenState extends State<QuoteScreen> {
     await prefs.setStringList('viewed_ids', _viewedIds.map((i) => i.toString()).toList());
   }
 
+  List<Quote> get _filteredQuotes {
+    var list = _quotes;
+    if (_selectedAuthor != 'All') list = list.where((q) => q.author == _selectedAuthor).toList();
+    if (_selectedTag != 'All') list = list.where((q) => q.tags.contains(_selectedTag)).toList();
+    return list;
+  }
+
   void _pickDailyQuote() {
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;
-    final filtered = _selectedAuthor == 'All' ? _quotes : _quotes.where((q) => q.author == _selectedAuthor).toList();
+    final filtered = _filteredQuotes;
     if (filtered.isEmpty) return;
     _currentQuote = filtered[Random(seed).nextInt(filtered.length)];
     _viewedIds.add(_currentQuote!.id);
@@ -111,7 +120,7 @@ class _QuoteScreenState extends State<QuoteScreen> {
   }
 
   void _pickNewQuote() {
-    final filtered = _selectedAuthor == 'All' ? _quotes : _quotes.where((q) => q.author == _selectedAuthor).toList();
+    final filtered = _filteredQuotes;
     if (filtered.isEmpty) return;
     final unseen = filtered.where((q) => !_viewedIds.contains(q.id)).toList();
     final pool = unseen.isNotEmpty ? unseen : filtered;
@@ -171,37 +180,59 @@ class _QuoteScreenState extends State<QuoteScreen> {
     } finally { setState(() => _isFavoriting = false); }
   }
 
+  // ============================================================
+  // ✅ 跨平台分享：使用 share_plus 替代 dart:html
+  // ============================================================
   Future<void> _shareCard() async {
     if (_currentQuote == null || _isGeneratingCard) return;
     setState(() => _isGeneratingCard = true);
     try {
-      final theme = appCardThemes[_random.nextInt(appCardThemes.length)];
-      final bytes = await _renderCard(_currentQuote!, theme);
+      final scrollColors = [const Color(0xFFFDF5E6), const Color(0xFFF5DEB3)];
+      final bytes = await _renderCard(_currentQuote!, scrollColors);
+
       if (bytes != null) {
-// Web only - skip on macOS
-print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('卡片已下载'), duration: Duration(seconds: 2)));
+        final tempDir = await getTemporaryDirectory();
+        final file = await File('${tempDir.path}/stoic_wisdom_${_currentQuote!.id}.png').writeAsBytes(bytes);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'image/png')],
+          text: '${_currentQuote!.english}\n${_currentQuote!.chinese}\n— ${_currentQuote!.author}',
+        );
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('生成失败：$e')));
-    } finally { setState(() => _isGeneratingCard = false); }
+    } finally {
+      setState(() => _isGeneratingCard = false);
+    }
   }
 
-  Future<List<int>?> _renderCard(Quote q, AppCardTheme theme) async {
-    final recorder = ui.PictureRecorder(); final canvas = Canvas(recorder);
-    const double w = 1080, h = 1350, p = 80, cw = w - p * 2;
-    canvas.drawRect(const Rect.fromLTWH(0, 0, w, h), Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: theme.gradient).createShader(const Rect.fromLTWH(0, 0, w, h)));
-    canvas.drawLine(const Offset(p, 120), const Offset(w - p, 120), Paint()..color = const Color(0x33FFFFFF)..strokeWidth = 1);
-    
-    final eng = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: ui.TextAlign.center, maxLines: 20))..pushStyle(ui.TextStyle(color: const Color(0xFFE0E0E0), fontSize: 42, fontWeight: ui.FontWeight.w300, height: 1.6))..addText(q.english)).build()..layout(const ui.ParagraphConstraints(width: cw));
-    final cn = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: ui.TextAlign.center, maxLines: 20))..pushStyle(ui.TextStyle(color: const Color(0x99FFFFFF), fontSize: 34, fontWeight: ui.FontWeight.w300, height: 1.7))..addText(q.chinese)).build()..layout(const ui.ParagraphConstraints(width: cw));
-    final au = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: ui.TextAlign.center))..pushStyle(ui.TextStyle(color: const Color(0x66FFFFFF), fontSize: 28, fontStyle: ui.FontStyle.italic))..addText('— ${q.author}')).build()..layout(const ui.ParagraphConstraints(width: cw));
+  Future<List<int>?> _renderCard(Quote q, List<Color> colors) async {
+    final recorder = ui.PictureRecorder(); 
+    final canvas = Canvas(recorder);
+    const double w = 1080, h = 1350, p = 100;
 
-    double y = max(160, (h - eng.height - 50 - cn.height - 50 - au.height) / 2);
-    canvas.drawParagraph(eng, Offset(p, y)); y += eng.height + 50; canvas.drawParagraph(cn, Offset(p, y)); y += cn.height + 50; canvas.drawParagraph(au, Offset(p, y));
-    canvas.drawLine(const Offset(p, h - 120), const Offset(w - p, h - 120), Paint()..color = const Color(0x33FFFFFF)..strokeWidth = 1);
-    canvas.drawParagraph((ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: ui.TextAlign.center))..pushStyle(ui.TextStyle(color: const Color(0x44FFFFFF), fontSize: 18, letterSpacing: 1))..addText('STOIC WISDOM  ·  barryunchained.github.io/stoic_app')).build()..layout(const ui.ParagraphConstraints(width: cw)), const Offset(p, h - 90));
-    
-    return (await (await recorder.endRecording().toImage(w.toInt(), h.toInt())).toByteData(format: ui.ImageByteFormat.png))?.buffer.asUint8List();
+    final paint = Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: colors).createShader(const Rect.fromLTWH(0, 0, w, h));
+    canvas.drawRect(const Rect.fromLTWH(0, 0, w, h), paint);
+
+    final borderPaint = Paint()..color = const Color(0xFF5D4037)..style = PaintingStyle.stroke..strokeWidth = 4;
+    canvas.drawRect(const Rect.fromLTWH(50, 50, w - 100, h - 100), borderPaint);
+    canvas.drawRect(const Rect.fromLTWH(65, 65, w - 130, h - 130), borderPaint..strokeWidth = 1.5);
+
+    void drawClassicText(String text, double fontSize, double y, Color color, {bool italic = false}) {
+      final pb = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: ui.TextAlign.center, maxLines: 15))
+        ..pushStyle(ui.TextStyle(color: color, fontSize: fontSize, height: 1.7, fontStyle: italic ? ui.FontStyle.italic : ui.FontStyle.normal, fontFamily: 'Georgia'))
+        ..addText(text);
+      final para = pb.build()..layout(const ui.ParagraphConstraints(width: w - p * 2));
+      canvas.drawParagraph(para, Offset(p, y));
+    }
+
+    drawClassicText(q.english, 52, 320, const Color(0xFF2E2E2E));
+    drawClassicText(q.chinese, 42, 620, const Color(0xFF4E4E4E));
+    drawClassicText("— ${q.author}", 34, 950, const Color(0xFF5D4037), italic: true);
+    drawClassicText("STOIC WISDOM  |  修行智慧", 24, 1230, const Color(0xFF8D6E63));
+
+    final image = await recorder.endRecording().toImage(w.toInt(), h.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
   }
 
   void _showSetUsernameDialog() { Navigator.push(context, MaterialPageRoute(builder: (_) => SetUsernameScreen(onDone: (name) => setState(() => _username = name)))); }
@@ -215,19 +246,6 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('再逛逛')),
           ElevatedButton(onPressed: () { Navigator.pop(ctx); Navigator.push(ctx, MaterialPageRoute(builder: (_) => const LoginScreen())); }, child: const Text('立即登录')),
-        ],
-      ),
-    );
-  }
-
-  void _confirmSignOut() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('确认退出'), content: const Text('退出后需要重新登录'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          ElevatedButton(onPressed: () { Navigator.pop(ctx); supabase.auth.signOut().then((_) { if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const QuoteScreen())); }); }, child: const Text('退出')),
         ],
       ),
     );
@@ -264,10 +282,18 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Flexible(child: Text(_username ?? (isGuest ? '游客模式' : user.email ?? ''), style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis)),
-                        Row(children: [
-                          if (!isGuest) GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(username: _username, onUpdate: (n) => setState(() => _username = n)))), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.person_outline, size: 18, color: Colors.grey))),
-                          GestureDetector(onTap: () => isGuest ? Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())) : _confirmSignOut(), child: Text(isGuest ? '登录' : '退出', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                        ]),
+                        GestureDetector(
+                          onTap: () => isGuest 
+                              ? Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())) 
+                              : Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(username: _username, onUpdate: (n) => setState(() => _username = n)))), 
+                          child: Row(
+                            children: [
+                              const Icon(Icons.person_outline, size: 18, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(isGuest ? '登录' : '个人中心', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -282,6 +308,21 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
                   children: _authors.map((a) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(label: Text(a == 'All' ? '全部' : a.split(' ').last, style: const TextStyle(fontSize: 11)), selected: _selectedAuthor == a, onSelected: (_) { setState(() => _selectedAuthor = a); _pickNewQuote(); }, visualDensity: VisualDensity.compact),
+                  )).toList(),
+                ),
+              ),
+              SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: ['All', 'resilience', 'virtue', 'mindset', 'self-mastery', 'death', 'time', 'acceptance', 'happiness', 'anger', 'desire', 'fear', 'freedom', 'action', 'relationships'].map((t) => Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(t == 'All' ? '全部主题' : (tagLabels[t] ?? t), style: const TextStyle(fontSize: 10)),
+                      selected: _selectedTag == t,
+                      onSelected: (_) { setState(() => _selectedTag = t); _pickNewQuote(); },
+                      visualDensity: VisualDensity.compact,
+                    ),
                   )).toList(),
                 ),
               ),
@@ -305,11 +346,11 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(_currentQuote?.english ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
+                                      Text(_currentQuote?.english ?? '', style: const TextStyle(fontFamily: 'Georgia', fontSize: 22, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
                                       const SizedBox(height: 20),
                                       Text(_currentQuote?.chinese ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w300, height: 1.6), textAlign: TextAlign.center),
                                       const SizedBox(height: 24),
-                                      Text('— ${_currentQuote?.author ?? ''}', style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                                      Text('— ${_currentQuote?.author ?? ''}', style: const TextStyle(fontFamily: 'Georgia', color: Colors.grey, fontStyle: FontStyle.italic)),
                                       const SizedBox(height: 12),
                                       IconButton(icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.grey), onPressed: _copyToClipboard, tooltip: '复制'),
                                       if (isGuest && _guestViewCount >= 7 && _guestViewCount < 10) Padding(padding: const EdgeInsets.only(top: 20), child: Text('今日额度剩余 ${10 - _guestViewCount} 条', style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic))),
@@ -333,9 +374,10 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
                   children: [
                     _ActionBtn(icon: Icons.casino_outlined, label: '刷新', onTap: () => _assignRandomQuote(isInitialLoad: false)),
                     SizedBox(width: 56, child: Stack(clipBehavior: Clip.none, children: [Center(child: _ActionBtn(icon: isFav ? Icons.favorite : Icons.favorite_outline, label: '收藏', onTap: _toggleFavorite, isActive: isFav)), if (_favoriteQuoteIds.isNotEmpty) Positioned(right: 4, top: -4, child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: Text('${_favoriteQuoteIds.length}', style: const TextStyle(fontSize: 8, color: Colors.white, height: 1))))])),
+                    
                     _ActionBtn(
                       icon: Icons.chat_bubble_outline, 
-                      label: _currentQuote != null && _currentQuote!.commentCount > 0 ? '感悟(${_currentQuote!.commentCount})' : '感悟', 
+                      label: _currentQuote != null && _currentQuote!.commentCount > 0 ? '评论(${_currentQuote!.commentCount})' : '评论', 
                       onTap: () {
                         if (_currentQuote == null) return;
                         if (isGuest) { _showRegistrationHook(context); return; }
@@ -346,8 +388,52 @@ print('Screenshot saved to device');        if (mounted) ScaffoldMessenger.of(co
                         )));
                       }
                     ),
-                    _ActionBtn(icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined, label: '分享', onTap: () => _shareCard()),
-                    _ActionBtn(icon: Icons.list_outlined, label: '列表', onTap: () => isGuest ? _showRegistrationHook(context, isFromFavorite: true) : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes, favoriteIds: _favoriteQuoteIds)))),
+                    
+                    _ActionBtn(
+                      icon: _isGeneratingCard ? Icons.hourglass_top : Icons.share_outlined, 
+                      label: '分享', 
+                      onTap: () {
+                        if (_currentQuote == null) return;
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                          builder: (context) => SafeArea(
+                            child: Wrap(
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('分享智慧', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.image_outlined),
+                                  title: const Text('生成羊皮纸智慧卡片'),
+                                  onTap: () { Navigator.pop(context); _shareCard(); },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.link_rounded),
+                                  title: const Text('复制语录链接'),
+                                  onTap: () { 
+                                    Navigator.pop(context);
+                                    Clipboard.setData(ClipboardData(text: "https://stoic-wisdom-e3b2e.web.app/?id=${_currentQuote?.id}"));
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('链接已复制')));
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                    ),
+                    
+                    _ActionBtn(
+                      icon: Icons.list_outlined, 
+                      label: '我的收藏', 
+                      onTap: () => isGuest 
+                          ? _showRegistrationHook(context, isFromFavorite: true) 
+                          : Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesScreen(allQuotes: _quotes, favoriteIds: _favoriteQuoteIds)))
+                    ),
                   ],
                 ),
               ),
