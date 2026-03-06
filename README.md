@@ -2,6 +2,18 @@
 
 A new Flutter project.
 
+## Runtime Configuration
+
+Supabase credentials must be provided at runtime with `--dart-define`.
+
+```bash
+flutter run \
+  --dart-define=SUPABASE_URL=your_supabase_url \
+  --dart-define=SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+`.env` is no longer loaded from Flutter assets and should never be committed.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
