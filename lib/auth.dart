@@ -37,6 +37,33 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isSignUp = false;
   String? _errorMessage;
 
+  Future<void> _logLoginEvent({String? userId, String? email}) async {
+    final eventUserId = userId ?? supabase.auth.currentUser?.id;
+    final eventEmail = email ?? supabase.auth.currentUser?.email;
+    if (eventUserId == null) {
+      if (kDebugMode) print('⚠️ 跳过登录审计：缺少用户ID');
+      return;
+    }
+
+    Object? lastError;
+    for (var attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await supabase.rpc(
+          'log_login_event',
+          params: {'p_user_id': eventUserId, 'p_email': eventEmail},
+        );
+        if (kDebugMode) print('🧾 登录审计记录成功（web=$kIsWeb）');
+        return;
+      } catch (e) {
+        lastError = e;
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    if (kDebugMode) {
+      print('⚠️ 记录登录审计失败（user=$eventUserId, web=$kIsWeb）: $lastError');
+    }
+  }
+
   Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -66,6 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (kDebugMode) print('📝 尝试注册账户: $email');
         final response = await supabase.auth.signUp(email: email, password: password);
         if (kDebugMode) print('✅ 注册成功，用户ID: ${response.user?.id}');
+        if (response.user != null && response.session != null) {
+          await _logLoginEvent(userId: response.user!.id, email: response.user!.email ?? email);
+        }
         if (mounted && response.user != null) {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetUsernameScreen(onDone: (username) {
             Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);
@@ -74,7 +104,11 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         if (kDebugMode) print('🔓 尝试登录账户: $email');
-        await supabase.auth.signInWithPassword(email: email, password: password);
+        final response = await supabase.auth.signInWithPassword(email: email, password: password);
+        if (kDebugMode) {
+          print('🔐 登录响应: user=${response.user?.id}, session=${response.session != null}');
+        }
+        await _logLoginEvent(userId: response.user?.id, email: response.user?.email ?? email);
         if (kDebugMode) print('✅ 登录成功，用户ID: ${supabase.auth.currentUser?.id}');
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const QuoteScreen()), (r) => false);

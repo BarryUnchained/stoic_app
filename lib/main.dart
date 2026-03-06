@@ -2,22 +2,22 @@ import 'auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'quote_screen.dart';
+
+const String _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const String _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
-    await dotenv.load(fileName: '.env');
-  } catch (e) {
-    if (kDebugMode) print('⚠️ .env 文件加载失败: $e');
-  }
-  
-  try {
+    if (_supabaseUrl.isEmpty || _supabaseAnonKey.isEmpty) {
+      throw StateError('Missing SUPABASE_URL / SUPABASE_ANON_KEY');
+    }
+
     await Supabase.initialize(
-      url: dotenv.env['SUPABASE_URL'] ?? 'https://asbzdkewvpixrvfeldwb.supabase.co',
-      anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? 'sb_publishable_DRkIY58m0eK9B7-_smWxrA_FefcshnA',
+      url: _supabaseUrl,
+      anonKey: _supabaseAnonKey,
     );
     if (kDebugMode) print('✅ Supabase 初始化成功');
   } catch (e) {
@@ -25,7 +25,7 @@ void main() async {
     runApp(const InitializationErrorApp());
     return;
   }
-  
+
   runApp(const StoicApp());
 }
 
@@ -43,7 +43,13 @@ class InitializationErrorApp extends StatelessWidget {
               const SizedBox(height: 16),
               const Text('初始化失败'),
               const SizedBox(height: 8),
-              const Text('请检查 .env 文件配置', style: TextStyle(color: Colors.grey)),
+              const Text('请检查 SUPABASE 运行时配置', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 4),
+              const Text(
+                '通过 --dart-define 传入 SUPABASE_URL 和 SUPABASE_ANON_KEY',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               ElevatedButton(onPressed: () { main(); }, child: const Text('重试')),
             ],
@@ -95,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
     _fadeIn = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
     _controller.forward();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeApp();
     });
@@ -105,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     try {
       // ✅ 动画播放期间同步等待最短展示时间，不浪费时间
       await Future.delayed(const Duration(milliseconds: 1500));
-      
+
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
@@ -128,9 +134,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   @override
-  void dispose() { 
-    _controller.dispose(); 
-    super.dispose(); 
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
